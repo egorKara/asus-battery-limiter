@@ -39,6 +39,12 @@ for guidance in catalog["manufacturer_guidance"]:
     assert urlparse(guidance["source_url"]).scheme == "https"
     assert all(type(m["max_percent"]) is int and 0 < m["max_percent"] <= 100
                for m in guidance["modes"])
+    assert all(
+        m.get("resume_below_percent") is None or
+        (type(m["resume_below_percent"]) is int and
+         0 <= m["resume_below_percent"] < m["max_percent"])
+        for m in guidance["modes"]
+    ), "Manufacturer hysteresis must stay below its upper limit"
 for reference in catalog["references"]:
     assert urlparse(reference["url"]).scheme == "https"
 assert not any(

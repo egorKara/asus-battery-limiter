@@ -1,4 +1,4 @@
-:root{color-scheme:light;--ink:#1d3439;--muted:#617578;--line:#dbe4df;--signal:#f0bd91;--dark:#123b41;--cream:#eef3ee;--white:#fff;--copper:#be7652;--paper:#f7f9f6;--max:1200px;--display-font:Bahnschrift,"Arial Narrow","Segoe UI",Arial,sans-serif;--body-font:"Segoe UI",Arial,sans-serif;--data-font:"SFMono-Regular",Consolas,"Liberation Mono",monospace;--scroll-thumb:#a7b9b4;--scroll-track:#edf1ee}
+:root{color-scheme:light;--ink:#1d3439;--muted:#617578;--line:#dbe4df;--signal:#f0bd91;--dark:#123b41;--cream:#eef3ee;--white:#ffffff;--copper:#be7652;--paper:#f7f9f6;--max:1200px;--display-font:Bahnschrift,"Arial Narrow","Segoe UI",Arial,sans-serif;--body-font:"Segoe UI",Arial,sans-serif;--data-font:"SFMono-Regular",Consolas,"Liberation Mono",monospace;--scroll-thumb:#a7b9b4;--scroll-track:#edf1ee}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:90px}
 body{margin:0;background:#fff;color:var(--ink);font-family:var(--body-font);font-size:15px;line-height:1.55}

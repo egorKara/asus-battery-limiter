@@ -37,6 +37,8 @@ const a = context.appTest;
 a.drawCatalog(data);
 assert.equal(nodes["catalog-list"].children.length,1);
 assert.equal(nodes["guidance-list"].children.length,3);
+assert.equal(data.manufacturer_guidance[0].modes[1].resume_below_percent,78);
+assert.equal(data.manufacturer_guidance[0].modes[2].resume_below_percent,58);
 assert.equal(nodes["count-ready"].textContent,0);
 nodes.search.value = "not here";
 a.drawCatalog(data);
