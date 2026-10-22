@@ -11,12 +11,16 @@ const code = fs.readFileSync(path.join(root, "docs/app.js"), "utf8");
 class E {
   constructor() { this.children = []; this.value = ""; this.hidden = false; this.textContent = ""; }
   append(...xs) { this.children.push(...xs); }
+  setAttribute(name,value) { this[name] = value; }
+  removeAttribute(name) { delete this[name]; }
+  focus() { this.focused = true; }
   replaceChildren(...xs) { this.children = xs; }
   addEventListener() {}
   reportValidity() { return true; }
 }
 const names = ["search","filter","report-form","catalog-list","catalog-empty","results-summary","count-devices",
-  "count-ready","count-sources","catalog-updated","catalog-status","guidance-list","form-feedback"];
+  "count-ready","count-sources","catalog-updated","catalog-status","guidance-list","form-feedback",
+  "catalog-retry","clear-search","empty-title","empty-description","reset-filters","issue-link"];
 const nodes = Object.fromEntries(names.map(n => [n, new E()]));
 nodes.filter.value = "all";
 const document = {
@@ -25,7 +29,7 @@ const document = {
   createTextNode(value) { const n = new E(); n.textContent = value; return n; }
 };
 const opened = [];
-const context = {document, URL, window: {open: url => opened.push(url)},
+const context = {document, URL, URLSearchParams, window: {open: url => opened.push(url)},
   fetch: async () => ({ok: true, json: async () => data})};
 vm.runInNewContext(code + "\nglobalThis.appTest = {drawCatalog,profileReady,submitReport,makeReport,safeUrl};",context);
 const a = context.appTest;
@@ -53,14 +57,18 @@ const inputs = {
   energy_full:"",energy_full_design:"",source_url:"",note:""
 };
 const form = new E();
-form.elements = {namedItem: name => ({value:inputs[name]})};
+const fields = Object.fromEntries(Object.keys(inputs).map(name => [name, new E()]));
+fields.privacy = new E(); fields.privacy.checked = true;
+form.elements = {namedItem: name => { const field = fields[name]; field.value = inputs[name]; return field; }};
 const submit = () => a.submitReport({preventDefault(){},currentTarget:form});
 submit();
 assert.equal(opened.length,1);
+assert.equal(nodes["issue-link"].hidden,false);
 assert(new URL(opened[0]).searchParams.get("body").includes('"status": "unverified_suggestion"'));
 inputs.recommended_min = "40";
 submit();
 assert.equal(opened.length,1,"No submission when MAX is missing");
+assert.equal(fields.recommended_max["aria-invalid"],"true");
 inputs.recommended_max = "80";
 submit();
 assert.equal(opened.length,1,"No submission without source for window");
@@ -74,4 +82,15 @@ inputs.recommended_min = "40";
 inputs.energy_full = "50000";
 submit();
 assert.equal(opened.length,2,"No submission on incomplete health measurement");
-console.log("PASS: site rendering, safety, filtering and issue submission");
+inputs.energy_full_design = "51000";
+inputs.cycle_count = "2.5";
+submit();
+assert.equal(opened.length,2,"Non-integer cycle rejected");
+inputs.cycle_count = "2";
+submit();
+assert.equal(opened.length,3,"Valid observation opens a draft");
+fields.privacy.checked = false;
+submit();
+assert.equal(opened.length,3,"No submission without publication consent");
+assert.equal(fields.privacy["aria-invalid"],"true");
+console.log("PASS: catalog rendering, URL, form validation, safety and GitHub draft");
