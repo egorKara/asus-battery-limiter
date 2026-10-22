@@ -146,13 +146,47 @@ class PolicyTests(unittest.TestCase):
                   patch.object(bl, "INSTALLED", root / "libexec/battery-limiter"),
                   patch.object(bl.os, "geteuid", return_value=0),
                   patch.object(bl.os, "chown"),
+                  patch.object(bl, "live_state", return_value={
+                      "timestamp": float("inf"), "mode": "life", "min": 50,
+                      "max": 60, "phase": "hold", "error": None}) as mock_state,
+                  patch.object(bl, "number", return_value=50),
                   patch.object(bl.pwd, "getpwnam", return_value=SimpleNamespace(
                       pw_dir=str(home), pw_uid=1000, pw_gid=1000)),
                   patch.object(bl.subprocess, "run")):
                 bl.install("oem")
+                mock_state.return_value["error"] = "hardware rejected"
+                with self.assertRaisesRegex(RuntimeError, "hardware rejected"):
+                    bl.install("oem")
+                self.assertEqual(unit.read_text(), "old service")
             self.assertEqual((home / "bin/battery-limiter.v1.bak").read_text(), "old program")
             self.assertEqual((root / "etc/battery-limiter.service.v1.bak").read_text(), "old service")
             self.assertTrue(old_binary.read_text().startswith("#!/usr/bin/python3"))
+
+    def test_tray_names_hints_and_vector_animation(self):
+        import xml.etree.ElementTree as ET
+        self.assertEqual(list(bl.MODE_NAMES.values()),
+                         ["Полный заряд", "Ресурс батареи", "Без зарядки"])
+        self.assertEqual([len(bl.ICON_FRAMES[k]) for k in ("full", "life", "off")],
+                         [7, 4, 1])
+        self.assertEqual(bl.ICON_FRAMES["full"],
+                         ("ООО", "0ОО", "О0О", "ОО0", "0О0", "О00", "000"))
+        self.assertEqual(bl.ICON_FRAMES["life"],
+                         ("О0О", "ОО0", "О0О", "0ОО"))
+        self.assertEqual(bl.ICON_FRAMES["off"], ("ООО",))
+        self.assertIn("50–60%", bl.mode_hint("life", {"min": 50, "max": 60}))
+        self.assertIn("100%", bl.mode_hint("full", {}))
+        with patch.object(bl, "off_supported", return_value=False):
+            self.assertIn("Недоступно", bl.mode_hint("off", {}))
+        with tempfile.TemporaryDirectory() as d:
+            icons = Path(d)
+            bl.ensure_frame_icons(icons)
+            self.assertEqual(len(list(icons.glob("*.svg"))), 7)
+            for path in icons.glob("*.svg"):
+                root = ET.parse(path).getroot()
+                self.assertEqual(len(root), 3)
+                self.assertIn("symbolic.svg", path.name)
+                self.assertTrue(all(circle.attrib["stroke"] == "#bebebe"
+                                    for circle in root))
 
 
 if __name__ == "__main__":
