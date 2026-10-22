@@ -169,10 +169,10 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual([len(bl.ICON_FRAMES[k]) for k in ("full", "life", "off")],
                          [7, 4, 1])
         self.assertEqual(bl.ICON_FRAMES["full"],
-                         ("ООО", "0ОО", "О0О", "ОО0", "0О0", "О00", "000"))
+                         ("○○○", "●○○", "○●○", "○○●", "●○●", "○●●", "●●●"))
         self.assertEqual(bl.ICON_FRAMES["life"],
-                         ("О0О", "ОО0", "О0О", "0ОО"))
-        self.assertEqual(bl.ICON_FRAMES["off"], ("ООО",))
+                         ("○●○", "○○●", "○●○", "●○○"))
+        self.assertEqual(bl.ICON_FRAMES["off"], ("○○○",))
         self.assertIn("50–60%", bl.mode_hint("life", {"min": 50, "max": 60}))
         self.assertIn("100%", bl.mode_hint("full", {}))
         with patch.object(bl, "off_supported", return_value=False):
@@ -181,12 +181,20 @@ class PolicyTests(unittest.TestCase):
             icons = Path(d)
             bl.ensure_frame_icons(icons)
             self.assertEqual(len(list(icons.glob("*.svg"))), 7)
-            for path in icons.glob("*.svg"):
-                root = ET.parse(path).getroot()
-                self.assertEqual(len(root), 3)
-                self.assertIn("symbolic.svg", path.name)
-                self.assertTrue(all(circle.attrib["stroke"] == "#bebebe"
-                                    for circle in root))
+            for mode_frames in bl.ICON_FRAMES.values():
+                for frame in mode_frames:
+                    self.assertEqual(len(frame), 3)
+                    self.assertTrue(set(frame) <= {"○", "●"})
+                    icon = icons / (bl.frame_icon_name(frame) + ".svg")
+                    root = ET.parse(icon).getroot()
+                    self.assertEqual(len(root), 3)
+                    self.assertTrue(icon.name.endswith("-symbolic.svg"))
+                    self.assertEqual(
+                        "".join("●" if dot.attrib["fill"] == "#bebebe" else "○"
+                                for dot in root), frame)
+                    self.assertTrue(all(dot.attrib["stroke-width"] == "0.75"
+                                        and dot.attrib["stroke"] == "#bebebe"
+                                        for dot in root))
 
 
 if __name__ == "__main__":
