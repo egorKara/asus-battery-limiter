@@ -248,25 +248,25 @@ def notify(message):
 
 
 
-# Letter О is an outline; digit 0 is a filled dot. The icon follows the GTK theme.
+# ○ = hollow, ● = filled; symbolic SVG colors are supplied by the GTK theme.
 ICON_FRAMES = {
-    "full": ("ООО", "0ОО", "О0О", "ОО0", "0О0", "О00", "000"),
-    "life": ("О0О", "ОО0", "О0О", "0ОО"),
-    "off": ("ООО",),
+    "full": ("○○○", "●○○", "○●○", "○○●", "●○●", "○●●", "●●●"),
+    "life": ("○●○", "○○●", "○●○", "●○○"),
+    "off": ("○○○",),
 }
 ICON_DIR = Path.home() / ".local/share/icons/hicolor/scalable/apps"
 
 
 def frame_icon_name(frame):
-    return "battery-limiter-" + frame.replace("О", "o").replace("0", "x") + "-symbolic"
+    return "battery-limiter-" + frame.replace("○", "o").replace("●", "x") + "-symbolic"
 
 
 def frame_svg(frame):
     circles = []
-    for x, symbol in zip((3, 8, 13), frame):
-        fill = "#bebebe" if symbol == "0" else "none"
-        circles.append(f'<circle cx="{x}" cy="8" r="1.9" fill="{fill}" '
-                       'stroke="#bebebe" stroke-width="1.25"/>')
+    for x, symbol in zip((2.8, 8, 13.2), frame):
+        fill = "#bebebe" if symbol == "●" else "none"
+        circles.append(f'<circle cx="{x}" cy="8" r="2.1" fill="{fill}" '
+                       'stroke="#bebebe" stroke-width="0.75"/>')
     return ('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" '
             'viewBox="0 0 16 16">' + "".join(circles) + '</svg>\n')
 
