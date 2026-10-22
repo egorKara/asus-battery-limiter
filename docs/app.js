@@ -211,6 +211,10 @@ function submitReport(event) {
   const form = event.currentTarget;
   const feedback = byId("form-feedback");
   feedback.textContent = "";
+  form.querySelectorAll('[aria-invalid="true"]').forEach(field => {
+    field.removeAttribute("aria-invalid");
+    field.removeAttribute("aria-describedby");
+  });
   for (const [name, message, max] of [
     ["manufacturer", "Укажите производителя ноутбука.", 60],
     ["laptop_model", "Укажите модель ноутбука.", 100]
