@@ -1,287 +1,438 @@
 #!/usr/bin/python3
-"""
-battery-limiter — управление зарядом батареи ASUS UX310U.
-Устанавливает порог заряда 60–100% с шагом 5% через /sys/class/power_supply/BAT0/
-Режимы: CLI, tray-иконка, systemd-служба.
-"""
-
+"""ASUS Battery Limiter 2.0: three modes, adaptive charge window, tray and service."""
 import argparse
 import json
 import os
+import pwd
+import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
-# ── Конфигурация ─────────────────────────────────────────────
-BATTERY = "/sys/class/power_supply/BAT0"
-THRESHOLD_FILE = f"{BATTERY}/charge_control_end_threshold"
-STATUS_FILE = f"{BATTERY}/status"
-CAPACITY_FILE = f"{BATTERY}/capacity"
-SERVICE_FILE = "/etc/systemd/system/battery-limiter.service"
-CONFIG_DIR = Path.home() / ".config"
-CONFIG_FILE = CONFIG_DIR / "battery-limiter.json"
-SERVICE_NAME = "battery-limiter"
+BATTERY = Path("/sys/class/power_supply/BAT0")
+CONFIG = Path.home() / ".config/battery-limiter.json"
+RUNTIME = Path("/run/battery-limiter.json")
+STATE = Path("/var/lib/battery-limiter/state.json")
+SERVICE = Path("/etc/systemd/system/battery-limiter.service")
+INSTALLED = Path("/usr/local/libexec/battery-limiter")
+MODE_NAMES = {"full": "1 — До 100%", "life": "2 — Ресурс батареи", "off": "3 — Без зарядки"}
+MODE_KEYS = {"1": "full", "2": "life", "3": "off"}
+POLL_SECONDS = 15
 
-# Иконки темы для разных состояний — привязка к блоку
-ICONS_BLOCK = {
-    (60, 65): "battery-caution-charging-symbolic",
-    (70, 75): "battery-low-charging-symbolic",
-    (80, 85): "battery-good-charging-symbolic",
-    (90, 95): "battery-full-charging-symbolic",
-    100: "battery-full-charging-symbolic",
-    "uncharged": "battery-missing-symbolic",
-}
 
-# Допустимые значения: 60–100% с шагом 5%
-ALLOWED_VALUES = [60, 65, 70, 75, 80, 85, 90, 95, 100]
-
-# ── Утилиты ──────────────────────────────────────────────────
-
-def read_threshold():
-    """Текущий порог из sysfs."""
+def read(name):
     try:
-        with open(THRESHOLD_FILE) as f:
-            return int(f.read().strip())
-    except (FileNotFoundError, ValueError, OSError):
+        return (BATTERY / name).read_text().strip()
+    except OSError:
         return None
 
-def read_capacity():
-    """Текущий уровень заряда %."""
+
+def number(name):
     try:
-        with open(CAPACITY_FILE) as f:
-            return int(f.read().strip())
-    except (FileNotFoundError, ValueError, OSError):
+        return int(read(name))
+    except (TypeError, ValueError):
         return None
 
-def read_status():
-    """Статус: Charging, Discharging, Full, Not charging."""
-    try:
-        with open(STATUS_FILE) as f:
-            return f.read().strip()
-    except (FileNotFoundError, OSError):
-        return "Unknown"
 
-def set_threshold(value):
-    """Установить порог заряда через systemd-run (без пароля)."""
-    if value not in ALLOWED_VALUES:
-        print(f"Ошибка: допустимые значения: {', '.join(str(v) for v in ALLOWED_VALUES)}")
-        return False
+def battery_info():
+    return {
+        "manufacturer": read("manufacturer") or "",
+        "model": read("model_name") or "",
+        "technology": read("technology") or "",
+        "design": number("energy_full_design") or number("charge_full_design"),
+        "full": number("energy_full") or number("charge_full"),
+        "cycles": number("cycle_count"),
+    }
+
+
+def profile(info, cycle):
+    """ASUS officially recommends 60% for AC use; 50% restart is a software heuristic."""
+    if not info["manufacturer"].lower().startswith("asustek") or info["technology"].lower() != "li-ion":
+        raise ValueError("Нет подтверждённого профиля для этой батареи")
+    full, design = info["full"], info["design"]
+    health = full / design if full and design else None
+    if health is not None and not 0.25 <= health <= 1.05:
+        health = None  # Invalid calibration must not influence thresholds.
+    wear = health is not None and health < 0.80
+    shift = cycle % 3
+    low = (48 if wear else 50) - shift
+    high = 60 - shift - int(wear)
+    return low, high, health
+
+
+def battery_id(info):
+    return "|".join(str(info[k]) for k in ("manufacturer", "model", "technology", "design"))
+
+
+def read_json(path):
     try:
-        subprocess.run(
-            ["systemd-run", "--uid=0", "--wait", "--pipe", "--",
-             "sh", "-c", f"echo {value} > {THRESHOLD_FILE}"],
-            check=True, capture_output=True, text=True
-        )
-        save_config(value)
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def atomic_json(path, data, private=False):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temp.write_text(json.dumps(data, ensure_ascii=False) + "\n")
+        os.chmod(temp, 0o600 if private else 0o644)
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def get_mode(path=CONFIG):
+    data = json.loads(path.read_text())
+    mode = data.get("mode")
+    if mode is None and isinstance(data.get("threshold"), int):
+        mode = "full" if data["threshold"] == 100 else "life"
+    if mode not in MODE_NAMES:
+        raise ValueError("Некорректный режим в конфигурации")
+    return mode
+
+
+def off_supported():
+    # A charge threshold is not a charging disable switch.
+    return (BATTERY / "charging_enabled").is_file()
+
+
+def decide(mode, capacity, info, previous):
+    """Pure state transition: no sysfs writes. Returns state, requested limit and events."""
+    if not 0 <= capacity <= 100:
+        raise ValueError("Недостоверный процент заряда")
+    old = previous or {}
+    current = dict(old)
+    events = []
+    ident = battery_id(info)
+    fresh = old.get("mode") != mode or old.get("battery_id") != ident
+    if fresh:
+        current["mode"] = mode
+        current["battery_id"] = ident
+        current["cycle"] = old.get("cycle", 0) if old.get("battery_id") == ident else 0
+        current["full_notified"] = capacity == 100
+        if mode == "life":
+            low, high, health = profile(info, current["cycle"])
+            current.update({"min": low, "max": high, "health": health,
+                            "phase": "charging" if capacity < low else "hold"})
+        elif mode == "full":
+            current.update({"min": None, "max": 100, "phase": "full"})
+        else:
+            current.update({"min": None, "max": None, "phase": "off"})
+
+    if mode == "off":
+        if not off_supported():
+            raise RuntimeError("Режим 3 не поддерживается: аппаратного отключения зарядки нет")
+        target = None
+    elif mode == "full":
+        target = 100
+    else:
+        if current["phase"] == "charging" and capacity >= current["max"]:
+            events.append(f"Достигнут верхний порог {current['max']}%")
+            current["cycle"] += 1
+            low, high, health = profile(info, current["cycle"])
+            current.update({"min": low, "max": high, "health": health, "phase": "hold"})
+        elif current["phase"] == "hold" and capacity < current["min"]:
+            events.append(f"Достигнут нижний порог {current['min']}%")
+            current["phase"] = "charging"
+        target = current["max"] if current["phase"] == "charging" else current["min"]
+    return current, target, events
+
+
+def set_file(name, value):
+    path = BATTERY / name
+    if not path.is_file():
+        raise RuntimeError(f"Нет аппаратного управления: {name}")
+    if read(name) == str(value):
+        return
+    path.write_text(str(value))
+    if read(name) != str(value):
+        raise RuntimeError(f"Контроллер не подтвердил {name}={value}")
+
+
+def event(state, message):
+    state["event_id"] = state.get("event_id", 0) + 1
+    state["events"] = (state.get("events", []) + [
+        {"id": state["event_id"], "message": message}
+    ])[-10:]
+
+
+def step(config_path, previous):
+    mode = get_mode(config_path)
+    capacity = number("capacity")
+    if capacity is None:
+        raise RuntimeError("Не удалось прочитать заряд аккумулятора")
+    state, target, messages = decide(mode, capacity, battery_info(), previous)
+    if mode == "off":
+        set_file("charging_enabled", 0)
+    else:
+        if off_supported():
+            set_file("charging_enabled", 1)
+        set_file("charge_control_end_threshold", target)
+    status = read("status") or "Unknown"
+    if status == "Charging" and previous.get("status") not in (None, "Charging"):
+        messages.append("Зарядка аккумулятора началась")
+    if mode == "full":
+        if capacity < 100:
+            state["full_notified"] = False
+        elif status in ("Full", "Not charging") and not state.get("full_notified", False):
+            messages.append("Достигнут полный заряд 100%")
+            state["full_notified"] = True
+    for message in messages:
+        event(state, message)
+    state.update({"capacity": capacity, "status": status})
+    return state
+
+
+def monitor(config_path):
+    if os.geteuid() != 0:
+        raise PermissionError("Контроллер должен работать с правами root")
+    previous = read_json(STATE)
+    last_error = None
+    while True:
+        try:
+            updated = step(config_path, previous)
+            if updated != previous:
+                atomic_json(STATE, updated)
+            previous = updated
+            error = None
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            error = str(exc)
+            if error != last_error:
+                print(f"Battery Limiter: {error}", file=sys.stderr, flush=True)
+        last_error = error
+        atomic_json(RUNTIME, {**previous, "error": error, "timestamp": time.time()})
+        time.sleep(POLL_SECONDS)
+
+
+def live_state():
+    state = read_json(RUNTIME)
+    return state if time.time() - state.get("timestamp", 0) < 60 else {}
+
+
+def set_mode(mode):
+    if mode == "off" and not off_supported():
+        raise RuntimeError("Режим 3 недоступен: у батареи отсутствует charging_enabled")
+    if not live_state():
+        raise RuntimeError("Контроллер не запущен; текущие настройки не изменены")
+    atomic_json(CONFIG, {"mode": mode}, private=True)
+
+
+def status():
+    state = live_state()
+    try:
+        mode = get_mode()
+    except (OSError, ValueError, json.JSONDecodeError):
+        mode = None
+    print("Режим:", MODE_NAMES.get(mode, "не задан"))
+    print("Заряд:", number("capacity"), "%; состояние:", read("status"))
+    print("Аппаратный порог:", number("charge_control_end_threshold"))
+    if state:
+        print("MIN/MAX:", state.get("min"), "/", state.get("max"),
+              "; фаза:", state.get("phase"))
+        if state.get("error"):
+            print("Ошибка:", state["error"])
+    else:
+        print("Контроллер не запущен или не отвечает")
+    if not off_supported():
+        print("Режим 3: аппаратно недоступен")
+
+
+def notify(message):
+    try:
+        subprocess.run(["notify-send", "-a", "ASUS Battery Limiter",
+                        "Аккумулятор", message], check=False, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def tray():
+    try:
+        import gi
+        gi.require_version("Gtk", "3.0")
+        gi.require_version("AppIndicator3", "0.1")
+        from gi.repository import AppIndicator3, GLib, Gtk
+    except (ImportError, ValueError) as exc:
+        raise RuntimeError("Нужны python3-gi и AppIndicator3") from exc
+
+    indicator = AppIndicator3.Indicator.new(
+        "battery-limiter", "battery-good-charging-symbolic",
+        AppIndicator3.IndicatorCategory.HARDWARE)
+    menu = Gtk.Menu()
+    first = None
+    items = {}
+    editing = False
+
+    def changed(widget, mode):
+        if editing or not widget.get_active():
+            return
+        try:
+            set_mode(mode)
+        except (OSError, RuntimeError) as exc:
+            notify(str(exc))
+            refresh()
+
+    for key, name in MODE_NAMES.items():
+        item = Gtk.RadioMenuItem(label=name) if first is None else Gtk.RadioMenuItem(group=first, label=name)
+        first = first or item
+        item.connect("toggled", changed, key)
+        item.set_sensitive(key != "off" or off_supported())
+        menu.append(item)
+        items[key] = item
+    menu.append(Gtk.SeparatorMenuItem())
+    info_item = Gtk.MenuItem(label="Считывание состояния…")
+    info_item.set_sensitive(False)
+    menu.append(info_item)
+    quit_item = Gtk.MenuItem(label="Выход из индикатора")
+    quit_item.connect("activate", lambda *_: Gtk.main_quit())
+    menu.append(quit_item)
+    menu.show_all()
+    indicator.set_menu(menu)
+    indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
+    last_event_id = None
+
+    def refresh():
+        nonlocal editing, last_event_id
+        state = live_state()
+        try:
+            selected = get_mode()
+        except (OSError, ValueError, json.JSONDecodeError):
+            selected = None
+        editing = True
+        try:
+            for key, item in items.items():
+                if key == selected and not item.get_active():
+                    item.set_active(True)
+                item.set_sensitive(bool(state) and (key != "off" or off_supported()))
+        finally:
+            editing = False
+        if state:
+            line = f"{state.get('capacity')}% · {state.get('status')}"
+            if selected == "life":
+                line += f" · {state.get('min')}–{state.get('max')}%"
+            if state.get("error"):
+                line = "Ошибка: " + state["error"]
+            events = state.get("events", [])
+            if last_event_id is not None:
+                for item in events:
+                    if item["id"] > last_event_id:
+                        notify(item["message"])
+            last_event_id = state.get("event_id", 0)
+        else:
+            line = "Контроллер не запущен"
+            last_event_id = None
+        info_item.set_label(line)
         return True
-    except subprocess.CalledProcessError as e:
-        print(f"Ошибка: {e.stderr.strip() or e}")
-        return False
 
-def save_config(value):
-    """Сохранить выбранный порог в конфиг."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    data = {"threshold": value}
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(data, f)
+    refresh()
+    GLib.timeout_add_seconds(10, refresh)
+    Gtk.main()
 
-def load_config():
-    """Загрузить конфиг."""
-    try:
-        with open(CONFIG_FILE) as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {"threshold": 100}
 
-# ── CLI ──────────────────────────────────────────────────────
+def install(user):
+    if os.geteuid() != 0:
+        raise PermissionError("Установку необходимо выполнять с правами администратора")
+    account = pwd.getpwnam(user)
+    home = Path(account.pw_dir)
+    config = home / ".config/battery-limiter.json"
+    user_binary = home / "bin/battery-limiter"
+    if not config.is_file() or not user_binary.is_file():
+        raise FileNotFoundError("Не найдены существующие настройки или установленная программа")
+    for path in (SERVICE, user_binary, config):
+        backup = Path(str(path) + ".v1.bak")
+        if path.exists() and not backup.exists():
+            shutil.copy2(path, backup)
 
-def cmd_set(args):
-    """Установить порог."""
-    if set_threshold(args.value):
-        cap = read_capacity()
-        print(f"Порог заряда установлен: {args.value}%")
-        print(f"Текущий заряд: {cap}% / {read_status()}")
-
-def cmd_status(_args):
-    """Показать статус."""
-    threshold = read_threshold()
-    cap = read_capacity()
-    status = read_status()
-    print(f"Порог заряда:  {threshold}%" if threshold else "Порог: не установлен")
-    print(f"Заряд:         {cap}%")
-    print(f"Статус:        {status}")
-    print(f"Батарея:       {BATTERY}")
-
-def cmd_install(_args):
-    """Установить systemd службу (динамический порог из конфига)."""
-    threshold = load_config().get("threshold", 80)
-    script = (
-        "import json;"
-        "t=json.load(open('/home/oem/.config/battery-limiter.json'))"
-        ".get('threshold',80);"
-        f"open('{THRESHOLD_FILE}','w').write(str(t))"
-    )
+    INSTALLED.parent.mkdir(parents=True, exist_ok=True)
+    source = Path(__file__).resolve()
+    candidate = INSTALLED.with_name(INSTALLED.name + ".new")
+    shutil.copyfile(source, candidate)
+    candidate.chmod(0o755)
+    os.replace(candidate, INSTALLED)
     unit = f"""[Unit]
-Description=Battery Limiter — restore adaptive charge threshold
-After=multi-user.target
+Description=ASUS Battery Limiter adaptive charge controller
+After=local-fs.target
+ConditionPathExists=/sys/class/power_supply/BAT0/charge_control_end_threshold
 
 [Service]
-Type=oneshot
-ExecStart=/usr/bin/python3 -c "{script}"
-RemainAfterExit=yes
+Type=simple
+ExecStart={INSTALLED} --monitor --config {config}
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 """
     try:
-        # systemd-run для записи service-файла от root
-        subprocess.run(
-            ["systemd-run", "--uid=0", "--wait", "--pipe", "--",
-             "sh", "-c", f"cat > {SERVICE_FILE} << 'UNITEOP'\n{unit}\nUNITEOP"],
-            check=True, capture_output=True, text=True
-        )
-        subprocess.run(
-            ["systemd-run", "--uid=0", "--wait", "--pipe", "--",
-             "systemctl", "daemon-reload"],
-            check=True, capture_output=True, text=True
-        )
-        subprocess.run(
-            ["systemd-run", "--uid=0", "--wait", "--pipe", "--",
-             "systemctl", "enable", "--now", SERVICE_NAME],
-            check=True, capture_output=True, text=True
-        )
-        print(f"Служба {SERVICE_NAME} установлена и запущена (порог {threshold}%).")
-    except subprocess.CalledProcessError as e:
-        print(f"Ошибка установки службы: {e.stderr.strip() or e}")
+        SERVICE.write_text(unit)
+        subprocess.run(["systemctl", "daemon-reload"], check=True)
+        subprocess.run(["systemctl", "enable", "--now", "battery-limiter.service"], check=True)
+        subprocess.run(["systemctl", "restart", "battery-limiter.service"], check=True)
+        subprocess.run(["systemctl", "is-active", "--quiet", "battery-limiter.service"], check=True)
+        replacement = user_binary.with_name(".battery-limiter.v2.new")
+        shutil.copyfile(source, replacement)
+        replacement.chmod(0o755)
+        os.chown(replacement, account.pw_uid, account.pw_gid)
+        os.replace(replacement, user_binary)
+    except (OSError, subprocess.CalledProcessError):
+        backup = Path(str(SERVICE) + ".v1.bak")
+        if backup.exists():
+            shutil.copy2(backup, SERVICE)
+        else:
+            SERVICE.unlink(missing_ok=True)
+        subprocess.run(["systemctl", "daemon-reload"], check=False)
+        subprocess.run(["systemctl", "restart", "battery-limiter.service"], check=False)
+        raise
+    print("Версия 2 установлена. Перезапустите значок в трее; проверьте режимы и порог")
 
-def cmd_uninstall(_args):
-    """Удалить службу."""
-    try:
-        subprocess.run(
-            ["systemd-run", "--uid=0", "--wait", "--pipe", "--",
-             "systemctl", "disable", "--now", SERVICE_NAME],
-            check=True, capture_output=True, text=True
-        )
-        subprocess.run(
-            ["systemd-run", "--uid=0", "--wait", "--pipe", "--",
-             "rm", "-f", SERVICE_FILE],
-            check=True, capture_output=True, text=True
-        )
-        print(f"Служба {SERVICE_NAME} удалена.")
-    except subprocess.CalledProcessError as e:
-        print(f"Ошибка: {e.stderr.strip() or e}")
 
-# ── Tray ─────────────────────────────────────────────────────
+def uninstall():
+    if os.geteuid() != 0:
+        raise PermissionError("Удаление службы требует прав администратора")
+    subprocess.run(["systemctl", "disable", "--now", "battery-limiter.service"], check=True)
+    SERVICE.unlink(missing_ok=True)
+    INSTALLED.unlink(missing_ok=True)
+    subprocess.run(["systemctl", "daemon-reload"], check=True)
+    print("Служба удалена; текущий аппаратный порог не менялся")
 
-def tray():
-    """Запустить трей-иконку с меню выбора порога."""
-    try:
-        import gi
-        gi.require_version("Gtk", "3.0")
-        gi.require_version("AppIndicator3", "0.1")
-        from gi.repository import Gtk, AppIndicator3, GLib
-    except (ImportError, ValueError):
-        print("Ошибка: требуется python3-gi и gir1.2-appindicator3-0.1")
-        print("Установите: sudo apt install gir1.2-appindicator3-0.1")
-        sys.exit(1)
-
-    def get_tooltip():
-        cap = read_capacity()
-        thr = read_threshold() or 100
-        st = read_status()
-        return f"🔋 {cap}% / Порог {thr}% / {st}"
-
-    def set_and_quit(value):
-        set_threshold(value)
-        indicator.set_tooltip_text(get_tooltip())
-
-    def build_menu():
-        nonlocal menu
-        menu = Gtk.Menu()
-        current = load_config().get("threshold", 100)
-        first_item = None
-        for v in ALLOWED_VALUES:
-            if first_item is None:
-                item = Gtk.RadioMenuItem(label=f"  {v}%  ")
-                first_item = item
-            else:
-                item = Gtk.RadioMenuItem(group=first_item, label=f"  {v}%  ")
-            item.set_active(v == current)
-            item.connect("toggled", lambda _, val=v: set_and_quit(val) if _.get_active() else None)
-            menu.append(item)
-        menu.append(Gtk.SeparatorMenuItem())
-        info = Gtk.MenuItem(label=f"  {read_capacity()}% / {read_status()}  ")
-        info.set_sensitive(False)
-        menu.append(info)
-        menu.append(Gtk.SeparatorMenuItem())
-        quit_item = Gtk.MenuItem(label="  Выход  ")
-        quit_item.connect("activate", lambda _: Gtk.main_quit())
-        menu.append(quit_item)
-        menu.show_all()
-
-    def refresh_tooltip(*_):
-        indicator.set_tooltip_text(get_tooltip())
-
-    menu = None
-    build_menu()
-
-    indicator = AppIndicator3.Indicator.new(
-        "battery-limiter",
-        "battery-good-charging-symbolic",
-        AppIndicator3.IndicatorCategory.HARDWARE,
-    )
-    indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
-    indicator.set_menu(menu)
-
-    # Обновление тултипа каждые 30с
-    GLib.timeout_add_seconds(30, refresh_tooltip)
-
-    print("battery-limiter tray запущен. Иконка в трее.")
-    try:
-        Gtk.main()
-    except KeyboardInterrupt:
-        pass
-
-# ── Главный парсер ───────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Battery Limiter — порог заряда ASUS UX310U",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Примеры:
-  battery-limiter --tray          # запустить трей-иконку
-  battery-limiter set 80          # установить порог 80%
-  battery-limiter status          # показать статус
-  battery-limiter install         # установить systemd службу
-  battery-limiter uninstall       # удалить службу
-
-Допустимые значения: 60, 65, 70, 75, 80, 85, 90, 95, 100"""
-    )
-    parser.add_argument("--tray", action="store_true", help="Запустить трей-иконку")
-
-    sub = parser.add_subparsers(dest="command")
-    set_p = sub.add_parser("set", help=f"Установить порог заряда ({'/'.join(str(v) for v in ALLOWED_VALUES)}%)")
-    set_p.add_argument("value", type=int, choices=ALLOWED_VALUES, help="Порог в процентах")
-
-    sub.add_parser("status", help="Показать статус батареи")
-    sub.add_parser("install", help="Установить systemd службу автозагрузки")
-    sub.add_parser("uninstall", help="Удалить systemd службу")
-
+    parser = argparse.ArgumentParser(description="Три режима заряда ASUS")
+    parser.add_argument("--tray", action="store_true")
+    parser.add_argument("--monitor", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--config", type=Path, help=argparse.SUPPRESS)
+    sub = parser.add_subparsers(dest="cmd")
+    mode_parser = sub.add_parser("mode", help="1: 100%; 2: ресурс; 3: без зарядки")
+    mode_parser.add_argument("level", choices=MODE_KEYS)
+    sub.add_parser("status")
+    install_parser = sub.add_parser("install")
+    install_parser.add_argument("--user", required=True, help="Имя пользователя рабочего стола")
+    sub.add_parser("uninstall")
     args = parser.parse_args()
+    try:
+        if args.monitor:
+            if not args.config:
+                parser.error("--monitor требует --config")
+            monitor(args.config)
+        elif args.tray:
+            tray()
+        elif args.cmd == "mode":
+            set_mode(MODE_KEYS[args.level])
+            print("Выбран режим:", MODE_NAMES[MODE_KEYS[args.level]])
+        elif args.cmd == "status":
+            status()
+        elif args.cmd == "install":
+            install(args.user)
+        elif args.cmd == "uninstall":
+            uninstall()
+        else:
+            parser.print_help()
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
+        print("Ошибка:", exc, file=sys.stderr)
+        return 1
+    return 0
 
-    if args.tray:
-        tray()
-    elif args.command == "set":
-        cmd_set(args)
-    elif args.command == "status":
-        cmd_status(args)
-    elif args.command == "install":
-        cmd_install(args)
-    elif args.command == "uninstall":
-        cmd_uninstall(args)
-    else:
-        parser.print_help()
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
