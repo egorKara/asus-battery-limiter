@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#122523">
+  <meta name="theme-color" content="#123b41">
   <meta name="description" content="Открытый каталог проверяемых сведений об аккумуляторах ноутбуков, порогах зарядки и поддержке Linux.">
   <title>Battery Atlas — данные для ASUS Battery Limiter</title>
   <link rel="stylesheet" href="./styles.css">
@@ -30,25 +30,25 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <div class="eyebrow"><span class="pulse-dot"></span> DATA FOR BETTER BATTERY CONTROL</div>
-          <h1>Умная зарядка начинается с <em>точных данных.</em></h1>
-          <p class="hero-intro">Собираем сведения об аккумуляторах ноутбуков: модели, рекомендации производителей, поддержку ограничения зарядки и подтверждения из Linux. Чтобы следующая версия <a href="https://github.com/egorKara/asus-battery-limiter">ASUS Battery Limiter</a> принимала решения на фактах.</p>
+          <div class="eyebrow"><span class="pulse-dot"></span> Открытые данные · Linux · аккумуляторы</div>
+          <h1>Не угадываем проценты. <em>Проверяем батареи.</em></h1>
+          <p class="hero-intro">Модели аккумуляторов, заводские ограничения и проверяемые возможности Linux — в открытом каталоге. Чтобы новая версия <a href="https://github.com/egorKara/asus-battery-limiter">ASUS Battery Limiter</a> выбирала режим по конкретной батарее, а не по предположению.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="#catalog">Смотреть каталог <span aria-hidden="true">↗</span></a>
             <a class="button button-ghost" href="#contribute">Предложить сведения</a>
           </div>
           <p class="hero-meta"><span class="dot-small"></span> Данные открыты · Источники сохраняются · Никаких изменений зарядки через сайт</p>
         </div>
-        <div class="hero-visual" aria-label="Три режима новой утилиты">
-          <div class="visual-top"><span>ЗАРЯДКА / ТРИ РЕЖИМА</span><span class="visual-live">● В РАЗРАБОТКЕ</span></div>
-          <div class="battery-drawing" aria-hidden="true">
-            <div class="battery-graphic"><div class="battery-charge"><span class="bolt">ϟ</span></div></div>
-            <div class="battery-level">80<span>%</span><small>Пример верхнего порога</small></div>
+        <div class="hero-visual" aria-label="Лабораторная карточка: индивидуальные пороги зарядки ASUS UX310U пока неизвестны">
+          <div class="visual-top"><span>BATTERY / REFERENCE CARD</span><span class="visual-live">REV 0.1 · СБОР ДАННЫХ</span></div>
+          <div class="calibration">
+            <div class="calibration-head"><div>ASUS UX310U <small>Образец записи каталога</small></div><span class="calibration-state">Нужна проверка</span></div>
+            <p class="calibration-label">Рекомендованный диапазон заряда</p>
+            <div class="calibration-track" role="img" aria-label="Диапазон от 0 до 100 процентов: точные MIN и MAX неизвестны"><span>MIN / MAX — НЕ УСТАНОВЛЕНЫ</span></div>
+            <div class="calibration-ticks" aria-hidden="true"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100%</span></div>
+            <div class="calibration-values"><div><small>MIN</small><strong>—</strong><span>нет подтверждения</span></div><div><small>MAX</small><strong>—</strong><span>нет подтверждения</span></div><div><small>Контроль</small><strong>sysfs</strong><span>верхний порог заявлен</span></div></div>
           </div>
-          <div class="mode-line"><span class="mode-num">01</span><span>Полная зарядка</span><strong>100%</strong></div>
-          <div class="mode-line mode-selected"><span class="mode-num">02</span><span>Адаптивный диапазон</span><strong>MIN → MAX</strong></div>
-          <div class="mode-line"><span class="mode-num">03</span><span>Остановка зарядки</span><strong>Нужна проверка</strong></div>
-          <div class="visual-footnote">Возможности режима 03 зависят от контроллера и драйвера ноутбука.</div>
+          <p class="visual-footnote">Сайт не назначает значения батарее. <a href="#catalog">Проверить свидетельства →</a></p>
         </div>
       </div>
     </section>
@@ -57,27 +57,28 @@
       <div class="wrap metrics-grid">
         <div class="metric"><span class="metric-value" id="count-devices">—</span><span class="metric-label">устройств в каталоге</span></div>
         <div class="metric"><span class="metric-value" id="count-ready">—</span><span class="metric-label">проверенных диапазонов MIN–MAX</span></div>
-        <div class="metric"><span class="metric-value" id="count-sources">—</span><span class="metric-label">первичных источников</span></div>
+        <div class="metric"><span class="metric-value" id="count-sources">—</span><span class="metric-label">ссылок на источники</span></div>
         <div class="metric metric-update"><span class="metric-label">ПОСЛЕДНЕЕ ОБНОВЛЕНИЕ</span><strong id="catalog-updated">Загрузка…</strong><span id="catalog-status" role="status">Открытый каталог JSON</span></div>
       </div>
     </section>
 
     <section class="section" id="catalog">
       <div class="wrap">
-        <div class="section-heading"><div><p class="section-kicker">01 / КАТАЛОГ</p><h2>Аккумуляторы и совместимость</h2><p class="section-intro">Отдельно фиксируем подтверждённые возможности, сообщения пользователей и то, что ещё неизвестно.</p></div><a class="text-link" href="./data/catalog.json" target="_blank" rel="noopener">Открыть данные JSON <span aria-hidden="true">↗</span></a></div>
+        <div class="section-heading"><div><p class="section-kicker">КАТАЛОГ</p><h2>Аккумуляторы и совместимость</h2><p class="section-intro">Отдельно фиксируем подтверждённые возможности, сообщения пользователей и то, что ещё неизвестно.</p></div><a class="text-link" href="./data/catalog.json" target="_blank" rel="noopener">Открыть данные JSON <span aria-hidden="true">↗</span></a></div>
         <div class="catalog-toolbar">
-          <label class="search-box"><span aria-hidden="true">⌕</span><span class="sr-only">Поиск по производителю и модели</span><input id="search" type="search" placeholder="Производитель, модель ноутбука или батареи…" autocomplete="off"></label>
-          <label class="filter-box">Показать <select id="filter"><option value="all">Все записи</option><option value="ready">Только готовые профили MIN–MAX</option><option value="research">Нужны данные</option></select></label>
+          <div class="search-box"><label class="sr-only" for="search">Поиск по производителю, ноутбуку или батарее</label><span class="search-symbol" aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Производитель, ноутбук или модель батареи" autocomplete="off"><button id="clear-search" type="button" class="search-clear" aria-label="Очистить поиск" hidden>×</button></div>
+          <label class="filter-box">Показать <select id="filter"><option value="all">Все записи</option><option value="ready">Подтверждённые MIN–MAX</option><option value="research">Нужны данные</option></select></label>
         </div>
-        <p class="results-summary" id="results-summary" aria-live="polite"></p>
-        <div class="catalog-grid" id="catalog-list" aria-live="polite"></div>
-        <div class="empty-state" id="catalog-empty" hidden><h3>Записей по запросу нет</h3><p>Попробуйте другое название или добавьте сведения о своём аккумуляторе.</p><a href="#contribute" class="text-link">Добавить данные →</a></div>
+        <p class="results-summary" id="results-summary" role="status" aria-live="polite">Загрузка записей…</p>
+        <button id="catalog-retry" type="button" class="retry-link" hidden>Не удалось получить данные. Повторить ↻</button>
+        <div class="catalog-grid" id="catalog-list" aria-busy="true"></div>
+        <div class="empty-state" id="catalog-empty" hidden><h3 id="empty-title">Совпадений не найдено</h3><p id="empty-description">Попробуйте другое название.</p><button id="reset-filters" class="text-action" type="button">Сбросить фильтры</button> <a href="#contribute" class="text-link">Добавить данные →</a></div>
       </div>
     </section>
 
     <section class="section section-guidance" id="guidance">
       <div class="wrap">
-        <p class="section-kicker">02 / ПЕРВОИСТОЧНИКИ</p><h2>Что действительно рекомендуют производители</h2>
+        <p class="section-kicker">ДОКУМЕНТАЦИЯ</p><h2>Что действительно рекомендуют производители</h2>
         <p class="section-intro guidance-intro">Заводские режимы — это подтверждённые <strong>верхние ограничения</strong>, а не готовый индивидуальный диапазон MIN–MAX. Их нельзя автоматически назначать всем батареям одной марки.</p>
         <div class="guidance-grid" id="guidance-list"></div>
         <div class="research-bar"><div><strong>Проверяемость важнее количества</strong><p>Неизвестный минимум, непроверенная химия или отсутствие управления зарядкой остаются «неизвестно». Сайт не подменяет это придуманными значениями.</p></div><a href="#method">Как устроены данные <span aria-hidden="true">↗</span></a></div>
@@ -87,7 +88,7 @@
     <section class="section contribute-section" id="contribute">
       <div class="wrap contribute-grid">
         <div class="contribute-aside">
-          <p class="section-kicker">03 / СОВМЕСТНЫЙ СБОР</p><h2>Знаете свою батарею? Помогите сделать каталог точнее.</h2>
+          <p class="section-kicker">СООБЩИТЬ ОБ УСТРОЙСТВЕ</p><h2>Знаете свою батарею? Помогите сделать каталог точнее.</h2>
           <p>Сообщите модель ноутбука, маркировку аккумулятора и доступные возможности Linux. Форма подготовит заявку в GitHub Issues. После проверки сведения могут попасть в каталог.</p>
           <div class="step"><span>01</span><div><strong>Опишите устройство</strong><small>Без серийного номера и личных данных</small></div></div>
           <div class="step"><span>02</span><div><strong>Приложите источник</strong><small>Документация производителя или результат проверки</small></div></div>
@@ -96,7 +97,7 @@
         </div>
         <div class="form-card">
           <div class="form-heading"><span class="form-icon" aria-hidden="true">＋</span><div><h3>Новая запись об аккумуляторе</h3><p>Поля со звёздочкой обязательны</p></div></div>
-          <form id="report-form">
+          <form id="report-form" novalidate>
             <div class="field-row">
               <label>Производитель ноутбука * <input name="manufacturer" required maxlength="60" placeholder="ASUS"></label>
               <label>Модель ноутбука * <input name="laptop_model" required maxlength="100" placeholder="UX310U"></label>
@@ -121,16 +122,18 @@
               <label>Предлагаемый MIN (%) <input name="recommended_min" type="number" min="0" max="99" step="1" placeholder="Нужен первоисточник"></label>
               <label>Предлагаемый MAX (%) <input name="recommended_max" type="number" min="1" max="100" step="1" placeholder="Нужен первоисточник"></label>
             </div>
+            <p class="form-hint">MIN и MAX указывайте как <strong>непроверенное предложение</strong> с источником. Заводские 60% и 80% не являются готовым диапазоном для конкретной батареи.</p>
             <div class="field-row">
               <label>Ёмкость сейчас (energy_full, мкВт·ч) <input name="energy_full" type="number" min="1" max="1000000000" step="1" placeholder="Необязательно"></label>
               <label>Ёмкость заводская (energy_full_design, мкВт·ч) <input name="energy_full_design" type="number" min="1" max="1000000000" step="1" placeholder="Необязательно"></label>
             </div>
             <label>Ссылка на документацию или подтверждение <input name="source_url" type="url" maxlength="500" placeholder="https://…"></label>
             <label>Примечание (без личных данных) <textarea name="note" rows="3" maxlength="650" placeholder="Какие значения и поведение вы проверяли?"></textarea></label>
-            <label class="consent"><input name="privacy" type="checkbox" required><span>Подтверждаю, что сообщение не содержит серийных номеров, контактов или других личных данных.</span></label>
+            <label class="consent"><input name="privacy" type="checkbox" required><span>Понимаю, что заявка будет публичной на GitHub. Убрал(а) серийные номера, контакты и личные сведения.</span></label>
             <p class="form-feedback" id="form-feedback" role="status"></p>
-            <button type="submit" class="button button-submit">Открыть заявку в GitHub <span aria-hidden="true">↗</span></button>
-            <p class="form-legal">Потребуется учётная запись GitHub. Данные появятся в каталоге только после проверки и включения в репозиторий.</p>
+            <button type="submit" class="button button-submit">Подготовить заявку в GitHub <span aria-hidden="true">↗</span></button>
+            <a id="issue-link" class="issue-fallback" href="https://github.com/egorKara/asus-battery-limiter/issues/new" target="_blank" rel="noopener noreferrer" hidden>Открыть подготовленную заявку вручную ↗</a>
+            <p class="form-legal">GitHub потребует вход и подтверждение публикации. Сайт не отправляет заявку и не изменяет каталог без вашего действия.</p>
           </form>
         </div>
       </div>
@@ -138,7 +141,7 @@
 
     <section class="section method-section" id="method">
       <div class="wrap method-grid">
-        <div><p class="section-kicker">04 / ДЛЯ РАЗРАБОТЧИКОВ</p><h2>Один каталог. Прозрачные решения.</h2><p class="section-intro">JSON хранится в том же репозитории, что и утилита. Каждая рекомендация сопровождается областью применимости, источником и датой проверки.</p>
+        <div><p class="section-kicker">СТРУКТУРА ДАННЫХ</p><h2>Один каталог. Прозрачные решения.</h2><p class="section-intro">JSON хранится в том же репозитории, что и утилита. Каждая рекомендация сопровождается областью применимости, источником и датой проверки.</p>
           <a class="button button-dark" href="./data/catalog.json" target="_blank" rel="noopener">Читать каталог JSON <span aria-hidden="true">↗</span></a>
         </div>
         <div class="method-points">
