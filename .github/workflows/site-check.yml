@@ -1,0 +1,17 @@
+name: Battery Atlas checks
+on:
+  push:
+    paths: ['docs/**', 'tests/**', 'DESIGN.md', '.github/workflows/site-check.yml']
+  pull_request:
+    paths: ['docs/**', 'tests/**', 'DESIGN.md', '.github/workflows/site-check.yml']
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate catalog
+        run: python3 tests/check_catalog.py
+      - name: Test catalog UI
+        run: node tests/check_site.js
