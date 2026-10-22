@@ -2,6 +2,7 @@
 const CATALOG_URL = "./data/catalog.json";
 const ISSUES_URL = "https://github.com/egorKara/asus-battery-limiter/issues/new";
 let catalog = null;
+let lastDraftUrl = null;
 const byId = (id) => document.getElementById(id);
 
 function el(name, className, value) {
@@ -210,7 +211,6 @@ function submitReport(event) {
   const form = event.currentTarget;
   const feedback = byId("form-feedback");
   feedback.textContent = "";
-  byId("issue-link").hidden = true;
   for (const [name, message, max] of [
     ["manufacturer", "Укажите производителя ноутбука.", 60],
     ["laptop_model", "Укажите модель ноутбука.", 100]
@@ -283,7 +283,10 @@ function submitReport(event) {
   const link = byId("issue-link");
   link.href = url;
   link.hidden = false;
-  window.open(url, "_blank", "noopener,noreferrer");
+  if (lastDraftUrl !== url) {
+    lastDraftUrl = url;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
   feedback.textContent = "Заявка подготовлена. Если вкладка не открылась, используйте ссылку ниже. Для публикации подтвердите отправку на GitHub.";
 }
 function rememberFilters() {
@@ -309,7 +312,11 @@ function resetFilters() {
   drawDevices();
   byId("search").focus();
 }
-byId("search").addEventListener("input", () => { rememberFilters(); drawDevices(); });
+byId("search").addEventListener("input", () => {
+  byId("clear-search").hidden = !byId("search").value.trim();
+  rememberFilters();
+  drawDevices();
+});
 byId("filter").addEventListener("change", () => { rememberFilters(); drawDevices(); });
 byId("clear-search").addEventListener("click", () => {
   byId("search").value = "";
@@ -319,7 +326,12 @@ byId("clear-search").addEventListener("click", () => {
 });
 byId("reset-filters").addEventListener("click", resetFilters);
 byId("catalog-retry").addEventListener("click", loadCatalog);
-byId("report-form").addEventListener("input", event => event.target.removeAttribute("aria-invalid"));
+byId("report-form").addEventListener("input", event => {
+  event.target.removeAttribute("aria-invalid");
+  byId("form-feedback").textContent = "";
+  byId("issue-link").hidden = true;
+  lastDraftUrl = null;
+});
 byId("report-form").addEventListener("submit", submitReport);
 restoreFilters();
 loadCatalog();

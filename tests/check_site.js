@@ -9,13 +9,14 @@ const root = path.join(__dirname, "..");
 const data = JSON.parse(fs.readFileSync(path.join(root, "docs/data/catalog.json"), "utf8"));
 const code = fs.readFileSync(path.join(root, "docs/app.js"), "utf8");
 class E {
-  constructor() { this.children = []; this.value = ""; this.hidden = false; this.textContent = ""; }
+  constructor() { this.children = []; this.value = ""; this.hidden = false; this.textContent = ""; this.listeners = {}; }
   append(...xs) { this.children.push(...xs); }
   setAttribute(name,value) { this[name] = value; }
   removeAttribute(name) { delete this[name]; }
   focus() { this.focused = true; }
   replaceChildren(...xs) { this.children = xs; }
-  addEventListener() {}
+  addEventListener(name,callback) { this.listeners[name] = callback; }
+  dispatch(name,event) { this.listeners[name]?.(event); }
   reportValidity() { return true; }
 }
 const names = ["search","filter","report-form","catalog-list","catalog-empty","results-summary","count-devices",
@@ -64,6 +65,10 @@ const submit = () => a.submitReport({preventDefault(){},currentTarget:form});
 submit();
 assert.equal(opened.length,1);
 assert.equal(nodes["issue-link"].hidden,false);
+submit();
+assert.equal(opened.length,1,"Repeated submit must not open duplicate tabs");
+nodes["report-form"].dispatch("input",{target:fields.recommended_min});
+assert.equal(nodes["issue-link"].hidden,true,"Editing hides stale draft link");
 assert(new URL(opened[0]).searchParams.get("body").includes('"status": "unverified_suggestion"'));
 inputs.recommended_min = "40";
 submit();

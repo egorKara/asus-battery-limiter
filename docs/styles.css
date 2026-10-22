@@ -1,4 +1,4 @@
-:root{color-scheme:light;--ink:#1d3439;--muted:#617578;--line:#dbe4df;--leaf:#f0bd91;--dark:#123b41;--cream:#eef3ee;--white:#fff;--copper:#be7652;--paper:#f7f9f6;--max:1200px;--display-font:Bahnschrift,"Arial Narrow","Segoe UI",Arial,sans-serif;--body-font:"Segoe UI",Arial,sans-serif;--data-font:"SFMono-Regular",Consolas,"Liberation Mono",monospace;--scroll-thumb:#a7b9b4;--scroll-track:#edf1ee}
+:root{color-scheme:light;--ink:#1d3439;--muted:#617578;--line:#dbe4df;--signal:#f0bd91;--dark:#123b41;--cream:#eef3ee;--white:#fff;--copper:#be7652;--paper:#f7f9f6;--max:1200px;--display-font:Bahnschrift,"Arial Narrow","Segoe UI",Arial,sans-serif;--body-font:"Segoe UI",Arial,sans-serif;--data-font:"SFMono-Regular",Consolas,"Liberation Mono",monospace;--scroll-thumb:#a7b9b4;--scroll-track:#edf1ee}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:90px}
 body{margin:0;background:#fff;color:var(--ink);font-family:var(--body-font);font-size:15px;line-height:1.55}
@@ -18,7 +18,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .brand small{display:block;color:#84918c;font-size:10px;letter-spacing:.06em;margin-top:5px;text-transform:none;font-weight:500}
 .brand-mark{width:35px;height:35px;background:#1a4036;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:3px;position:relative}
 .brand-mark:after{content:"";position:absolute;right:-3px;width:3px;height:12px;border-radius:0 3px 3px 0;background:#1a4036}
-.brand-mark span{display:block;width:5px;height:17px;background:var(--leaf);border-radius:2px}
+.brand-mark span{display:block;width:5px;height:17px;background:var(--signal);border-radius:2px}
 .brand-mark span:nth-child(2){height:23px}
 .site-header nav{display:flex;gap:33px;font-size:13px;color:#43524f;font-weight:600}
 .site-header nav a:hover,.header-github:hover,.text-link:hover{color:#4f8a3a}
@@ -29,7 +29,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .hero-grid{display:grid;grid-template-columns:1.16fr .9fr;align-items:center;gap:84px;padding:90px 0 96px;position:relative;z-index:1}
 .eyebrow,.section-kicker{color:#76a95a;font-size:11px;letter-spacing:.16em;font-weight:800}
 .eyebrow{color:#356b72;display:flex;align-items:center;gap:9px}
-.pulse-dot,.dot-small{display:inline-block;background:var(--leaf);width:7px;height:7px;border-radius:50%;box-shadow:0 0 0 4px #b9ef7820}
+.pulse-dot,.dot-small{display:inline-block;background:var(--signal);width:7px;height:7px;border-radius:50%;box-shadow:0 0 0 4px #b9ef7820}
 h1,h2,h3,p{margin-top:0}
 h1{font-size:clamp(40px,4.7vw,65px);letter-spacing:-.05em;line-height:1.095;font-weight:790;max-width:740px;margin:24px 0}
 h1 em{font-style:normal;color:#a85a3c}
@@ -201,3 +201,14 @@ html,:where(body,div,main,section,article,textarea){scrollbar-color:var(--scroll
 @media(forced-colors:active){:root{--scroll-thumb:ButtonText;--scroll-track:Canvas}}
 @media(max-width:760px){html{scroll-padding-top:130px}.site-header{height:106px}.header-inner{height:68px}.site-header nav{display:flex;position:absolute;top:68px;left:0;right:0;height:38px;gap:24px;align-items:center;overflow:auto hidden;white-space:nowrap;padding:0 17px;border-top:1px solid #e6eeea;background:#fff;font-size:12px}.site-header nav a{flex:none}.hero-grid{padding:52px 0 59px}.hero-visual{box-shadow:9px 10px 0 #d7e3dd}}
 @media(max-width:480px){.calibration-head{flex-direction:column;gap:7px}.calibration-head>div{font-size:24px}.calibration-values strong{font-size:23px}.calibration-values>div{padding:15px 7px}.visual-live{white-space:normal;text-align:right}}
+
+/* Contrast floor for small evidence labels and form guidance. */
+.brand strong{color:#a85a3c}
+.brand small,.hero-meta,.metric-label,.metric-update #catalog-status,
+.section-intro,.filter-box,.results-summary,.device-subtitle,.device-stat small,
+.device-footer,.empty-state p,.guidance-card p,.contribute-aside>p:not(.section-kicker),
+.step small,.privacy-note,.form-heading p,.form-legal{color:#526763}
+.guidance-card .overline{color:#2f615b}
+.device-stat{background:#eff4f1}
+.form-legal{line-height:1.7}
+.site-header nav a:focus-visible,.search-clear:focus-visible{outline:3px solid #397b82;outline-offset:3px}
