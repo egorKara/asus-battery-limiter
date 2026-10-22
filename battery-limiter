@@ -16,7 +16,7 @@ RUNTIME = Path("/run/battery-limiter.json")
 STATE = Path("/var/lib/battery-limiter/state.json")
 SERVICE = Path("/etc/systemd/system/battery-limiter.service")
 INSTALLED = Path("/usr/local/libexec/battery-limiter")
-MODE_NAMES = {"full": "1 — До 100%", "life": "2 — Ресурс батареи", "off": "3 — Без зарядки"}
+MODE_NAMES = {"full": "Полный заряд", "life": "Ресурс батареи", "off": "Без зарядки"}
 MODE_KEYS = {"1": "full", "2": "life", "3": "off"}
 POLL_SECONDS = 15
 
@@ -247,22 +247,91 @@ def notify(message):
         pass
 
 
+
+# Letter О is an outline; digit 0 is a filled dot. The icon follows the GTK theme.
+ICON_FRAMES = {
+    "full": ("ООО", "0ОО", "О0О", "ОО0", "0О0", "О00", "000"),
+    "life": ("О0О", "ОО0", "О0О", "0ОО"),
+    "off": ("ООО",),
+}
+ICON_DIR = Path.home() / ".local/share/icons/hicolor/scalable/apps"
+
+
+def frame_icon_name(frame):
+    return "battery-limiter-" + frame.replace("О", "o").replace("0", "x") + "-symbolic"
+
+
+def frame_svg(frame):
+    circles = []
+    for x, symbol in zip((3, 8, 13), frame):
+        fill = "#bebebe" if symbol == "0" else "none"
+        circles.append(f'<circle cx="{x}" cy="8" r="1.9" fill="{fill}" '
+                       'stroke="#bebebe" stroke-width="1.25"/>')
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" '
+            'viewBox="0 0 16 16">' + "".join(circles) + '</svg>\n')
+
+
+def ensure_frame_icons(directory=ICON_DIR):
+    directory.mkdir(parents=True, exist_ok=True)
+    for frame in {item for frames in ICON_FRAMES.values() for item in frames}:
+        dest = directory / (frame_icon_name(frame) + ".svg")
+        svg = frame_svg(frame)
+        if not dest.exists() or dest.read_text() != svg:
+            dest.write_text(svg)
+
+
+def mode_hint(mode, state):
+    if mode == "full":
+        return "Зарядка до 100%."
+    if mode == "life":
+        low, high = state.get("min"), state.get("max")
+        if isinstance(low, int) and isinstance(high, int):
+            return f"Ниже {low}% — зарядка до {high}%. Внутри {low}–{high}% не начинается."
+        return "Границы зарядки рассчитываются автоматически."
+    return ("Полностью отключает зарядку."
+            if off_supported() else "Недоступно: нет аппаратного отключения зарядки.")
+
+
 def tray():
+    """Show three charge modes and a theme-colored animated vector status icon."""
     try:
         import gi
         gi.require_version("Gtk", "3.0")
-        gi.require_version("AppIndicator3", "0.1")
-        from gi.repository import AppIndicator3, GLib, Gtk
+        from gi.repository import GLib, Gtk
     except (ImportError, ValueError) as exc:
-        raise RuntimeError("Нужны python3-gi и AppIndicator3") from exc
+        raise RuntimeError("Нужны python3-gi и Gtk3") from exc
 
-    indicator = AppIndicator3.Indicator.new(
-        "battery-limiter", "battery-good-charging-symbolic",
-        AppIndicator3.IndicatorCategory.HARDWARE)
+    ensure_frame_icons()
+    Gtk.IconTheme.get_default().rescan_if_needed()
+    # shortcut: Gtk.StatusIcon requires X11/XEmbed; replace it if this desktop moves to Wayland.
+    indicator = Gtk.StatusIcon.new_from_icon_name(frame_icon_name(ICON_FRAMES["off"][0]))
     menu = Gtk.Menu()
     first = None
     items = {}
     editing = False
+    last_event_id = None
+    hovered = None
+    frame_index = 0
+
+    def state_line(state):
+        if not state:
+            return "Контроллер не запущен"
+        if state.get("error"):
+            return "Ошибка: " + state["error"]
+        return f"{state.get('capacity')}% · {state.get('status')}"
+
+    info_item = Gtk.MenuItem(label="Считывание состояния…")
+    info_item.set_sensitive(False)
+
+    def show_hint(_widget, key):
+        nonlocal hovered
+        hovered = key
+        info_item.set_label(mode_hint(key, live_state()))
+
+    def clear_hint(*_):
+        nonlocal hovered
+        hovered = None
+        info_item.set_label(state_line(live_state()))
 
     def changed(widget, mode):
         if editing or not widget.get_active():
@@ -271,48 +340,50 @@ def tray():
             set_mode(mode)
         except (OSError, RuntimeError) as exc:
             notify(str(exc))
-            refresh()
+        refresh()
+        animate()
 
     for key, name in MODE_NAMES.items():
-        item = Gtk.RadioMenuItem(label=name) if first is None else Gtk.RadioMenuItem(group=first, label=name)
+        item = (Gtk.RadioMenuItem(label=name) if first is None else
+                Gtk.RadioMenuItem(group=first, label=name))
         first = first or item
         item.connect("toggled", changed, key)
-        item.set_sensitive(key != "off" or off_supported())
+        item.connect("select", show_hint, key)
+        item.connect("deselect", clear_hint)
         menu.append(item)
         items[key] = item
     menu.append(Gtk.SeparatorMenuItem())
-    info_item = Gtk.MenuItem(label="Считывание состояния…")
-    info_item.set_sensitive(False)
     menu.append(info_item)
     quit_item = Gtk.MenuItem(label="Выход из индикатора")
     quit_item.connect("activate", lambda *_: Gtk.main_quit())
     menu.append(quit_item)
     menu.show_all()
-    indicator.set_menu(menu)
-    indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
-    last_event_id = None
+    indicator.connect("activate", lambda *_: menu.popup_at_pointer(None))
+    indicator.connect("popup-menu", lambda *_: menu.popup_at_pointer(None))
+
+    def current_mode():
+        try:
+            return get_mode()
+        except (OSError, ValueError, json.JSONDecodeError):
+            return None
 
     def refresh():
         nonlocal editing, last_event_id
         state = live_state()
-        try:
-            selected = get_mode()
-        except (OSError, ValueError, json.JSONDecodeError):
-            selected = None
+        selected = current_mode()
         editing = True
         try:
             for key, item in items.items():
                 if key == selected and not item.get_active():
                     item.set_active(True)
-                item.set_sensitive(bool(state) and (key != "off" or off_supported()))
+                item.set_sensitive(bool(state))
+                item.set_tooltip_text(mode_hint(key, state))
         finally:
             editing = False
+        indicator.set_tooltip_text("Режим: " + MODE_NAMES.get(selected, "неизвестен"))
+        if not hovered:
+            info_item.set_label(state_line(state))
         if state:
-            line = f"{state.get('capacity')}% · {state.get('status')}"
-            if selected == "life":
-                line += f" · {state.get('min')}–{state.get('max')}%"
-            if state.get("error"):
-                line = "Ошибка: " + state["error"]
             events = state.get("events", [])
             if last_event_id is not None:
                 for item in events:
@@ -320,15 +391,22 @@ def tray():
                         notify(item["message"])
             last_event_id = state.get("event_id", 0)
         else:
-            line = "Контроллер не запущен"
             last_event_id = None
-        info_item.set_label(line)
+        return True
+
+    def animate():
+        nonlocal frame_index
+        mode = current_mode()
+        frames = ICON_FRAMES.get(mode, ICON_FRAMES["off"])
+        indicator.set_from_icon_name(frame_icon_name(frames[frame_index % len(frames)]))
+        frame_index += 1
         return True
 
     refresh()
+    animate()
+    GLib.timeout_add(550, animate)
     GLib.timeout_add_seconds(10, refresh)
     Gtk.main()
-
 
 def install(user):
     if os.geteuid() != 0:
@@ -368,14 +446,30 @@ WantedBy=multi-user.target
         SERVICE.write_text(unit)
         subprocess.run(["systemctl", "daemon-reload"], check=True)
         subprocess.run(["systemctl", "enable", "--now", "battery-limiter.service"], check=True)
+        started_at = time.time()
         subprocess.run(["systemctl", "restart", "battery-limiter.service"], check=True)
         subprocess.run(["systemctl", "is-active", "--quiet", "battery-limiter.service"], check=True)
+        for _ in range(30):
+            snapshot = live_state()
+            if snapshot.get("timestamp", 0) >= started_at:
+                if snapshot.get("error"):
+                    raise RuntimeError("Контроллер отклонил настройки: " + snapshot["error"])
+                expected = (100 if snapshot.get("mode") == "full" else
+                            snapshot.get("max") if snapshot.get("phase") == "charging" else
+                            snapshot.get("min"))
+                if snapshot.get("mode") == get_mode(config) and (
+                    snapshot.get("mode") == "off" or number("charge_control_end_threshold") == expected
+                ):
+                    break
+            time.sleep(0.2)
+        else:
+            raise RuntimeError("Нет подтверждения применения порога от контроллера")
         replacement = user_binary.with_name(".battery-limiter.v2.new")
         shutil.copyfile(source, replacement)
         replacement.chmod(0o755)
         os.chown(replacement, account.pw_uid, account.pw_gid)
         os.replace(replacement, user_binary)
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, RuntimeError, subprocess.CalledProcessError):
         backup = Path(str(SERVICE) + ".v1.bak")
         if backup.exists():
             shutil.copy2(backup, SERVICE)
