@@ -162,6 +162,11 @@ function makeReport(form) {
       start_threshold: form.elements.namedItem("start_threshold").value,
       pause_charging: form.elements.namedItem("pause_charging").value
     },
+    recommendation: {
+      min_percent: optionalNumber(form, "recommended_min"),
+      max_percent: optionalNumber(form, "recommended_max"),
+      status: "unverified_suggestion"
+    },
     observation: {
       cycle_count: optionalNumber(form, "cycle_count"),
       energy_full_uwh: optionalNumber(form, "energy_full"),
@@ -181,6 +186,20 @@ function submitReport(event) {
   const source = report.observation.source_url;
   if (source && !safeUrl(source)) {
     feedback.textContent = "Ссылка должна начинаться с http:// или https://.";
+    return;
+  }
+  const low = report.recommendation.min_percent;
+  const high = report.recommendation.max_percent;
+  if ((low === null) !== (high === null)) {
+    feedback.textContent = "Для диапазона заполните оба значения MIN и MAX или оставьте оба пустыми.";
+    return;
+  }
+  if (low !== null && (!Number.isInteger(low) || !Number.isInteger(high) || low < 0 || high > 100 || low >= high)) {
+    feedback.textContent = "Диапазон должен быть целым: 0 ≤ MIN < MAX ≤ 100.";
+    return;
+  }
+  if (low !== null && !source) {
+    feedback.textContent = "Для предложенного диапазона MIN–MAX укажите ссылку на первоисточник.";
     return;
   }
   const full = report.observation.energy_full_uwh;

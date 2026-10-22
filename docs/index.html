@@ -107,15 +107,19 @@
             </div>
             <div class="field-row">
               <label>Linux / версия ядра <input name="kernel" maxlength="90" placeholder="Например, Linux 6.18"></label>
-              <label>Батарея в sysfs <input name="battery_device" maxlength="20" pattern="BAT[0-9]+" placeholder="BAT0"></label>
+              <label>Батарея в sysfs <input name="battery_device" maxlength="30" pattern="[A-Za-z0-9_-]+" placeholder="BAT0"></label>
             </div>
             <div class="field-row">
               <label>Верхний порог зарядки <select name="end_threshold"><option value="unknown">Неизвестно</option><option value="yes">Работает</option><option value="no">Не поддерживается</option></select></label>
               <label>Нижний порог зарядки <select name="start_threshold"><option value="unknown">Неизвестно</option><option value="yes">Работает</option><option value="no">Не поддерживается</option></select></label>
             </div>
             <div class="field-row">
-              <label>Полная остановка зарядки <select name="pause_charging"><option value="unknown">Неизвестно</option><option value="yes">Проверена</option><option value="no">Не поддерживается</option></select></label>
+              <label>Полная остановка зарядки (не MAX) <select name="pause_charging"><option value="unknown">Неизвестно</option><option value="yes">Проверена</option><option value="no">Не поддерживается</option></select></label>
               <label>Число циклов (если известно) <input name="cycle_count" type="number" min="0" max="100000" step="1" placeholder="Необязательно"></label>
+            </div>
+            <div class="field-row">
+              <label>Предлагаемый MIN (%) <input name="recommended_min" type="number" min="0" max="99" step="1" placeholder="Нужен первоисточник"></label>
+              <label>Предлагаемый MAX (%) <input name="recommended_max" type="number" min="1" max="100" step="1" placeholder="Нужен первоисточник"></label>
             </div>
             <div class="field-row">
               <label>Ёмкость сейчас (energy_full, мкВт·ч) <input name="energy_full" type="number" min="1" max="1000000000" step="1" placeholder="Необязательно"></label>
