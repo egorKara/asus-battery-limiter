@@ -247,8 +247,9 @@ function submitReport(event) {
     ["energy_full", 1, 1000000000],
     ["energy_full_design", 1, 1000000000]
   ]) {
-    const raw = form.elements.namedItem(name).value;
-    if (raw !== "" && (!/^\d+$/.test(raw) || Number(raw) < min || Number(raw) > max)) {
+    const field = form.elements.namedItem(name);
+    const raw = field.value;
+    if (field.validity?.badInput || (raw !== "" && (!/^\d+$/.test(raw) || Number(raw) < min || Number(raw) > max))) {
       invalidate(form, name, "Здесь нужно целое число от " + min + " до " + max + ".");
       return;
     }
