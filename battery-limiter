@@ -404,7 +404,7 @@ def tray():
 
     refresh()
     animate()
-    GLib.timeout_add(550, animate)
+    GLib.timeout_add(1500, animate)
     GLib.timeout_add_seconds(10, refresh)
     Gtk.main()
 
