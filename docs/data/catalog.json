@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-22",
+  "policy": {
+    "source_required_for_recommendations": true,
+    "exact_battery_match_required": true,
+    "never_auto_apply_unverified": true
+  },
+  "devices": [
+    {
+      "id": "asus-ux310u-reported",
+      "manufacturer": "ASUS",
+      "laptop_model": "UX310U",
+      "battery_manufacturer": null,
+      "battery_model": null,
+      "battery_chemistry": null,
+      "operating_system": "Linux Mint 22.1",
+      "battery_device": "BAT0",
+      "capabilities": {
+        "end_threshold": "reported",
+        "start_threshold": "unknown",
+        "pause_charging": "unknown"
+      },
+      "recommended_window": {
+        "min_percent": null,
+        "max_percent": null,
+        "health_formula": null,
+        "scope": "unknown"
+      },
+      "evidence": {
+        "kind": "project_readme",
+        "checked_at": "2026-10-22",
+        "hardware_test_at": null,
+        "source_url": "https://github.com/egorKara/asus-battery-limiter/blob/main/README.md",
+        "notes": "README сообщает о проверке функции верхнего порога на UX310U. Маркировка аккумулятора, нижний порог и полная остановка зарядки там не подтверждены."
+      }
+    }
+  ],
+  "manufacturer_guidance": [
+    {
+      "id": "asus-battery-health-charging",
+      "manufacturer": "ASUS",
+      "title": "ASUS Battery Health Charging",
+      "scope": "Только модели, на которых производитель поддерживает соответствующие режимы Battery Health Charging / MyASUS. Не индивидуальный профиль батареи.",
+      "recommended_min_percent": null,
+      "verified_model_ids": [],
+      "modes": [
+        {
+          "id": "full",
+          "label": "Полная ёмкость",
+          "max_percent": 100,
+          "description": "Режим полной зарядки. Не является режимом максимального ресурса батареи."
+        },
+        {
+          "id": "balanced",
+          "label": "Сбалансированный режим",
+          "max_percent": 80,
+          "description": "Верхний предел заводского сбалансированного режима, а не универсальный максимум для любой модели."
+        },
+        {
+          "id": "lifespan",
+          "label": "Максимальный срок службы",
+          "max_percent": 60,
+          "description": "Верхний предел режима для длительной работы от сети на совместимых устройствах."
+        }
+      ],
+      "source_url": "https://www.asus.com/ru/support/faq/1032726/",
+      "checked_at": "2026-10-22"
+    }
+  ],
+  "references": [
+    {
+      "id": "linux-class",
+      "title": "Linux: power_supply class — значения ёмкости, единицы и статус",
+      "url": "https://docs.kernel.org/power/power_supply_class.html",
+      "checked_at": "2026-10-22"
+    },
+    {
+      "id": "linux-abi",
+      "title": "Linux: ABI sysfs — пороги start/end и charge_behaviour",
+      "url": "https://docs.kernel.org/admin-guide/abi-testing-files.html",
+      "checked_at": "2026-10-22"
+    }
+  ]
+}
