@@ -333,6 +333,7 @@ byId("reset-filters").addEventListener("click", resetFilters);
 byId("catalog-retry").addEventListener("click", loadCatalog);
 byId("report-form").addEventListener("input", event => {
   event.target.removeAttribute("aria-invalid");
+  event.target.removeAttribute("aria-describedby");
   byId("form-feedback").textContent = "";
   byId("issue-link").hidden = true;
   lastDraftUrl = null;
